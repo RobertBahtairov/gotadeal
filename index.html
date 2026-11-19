@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GotADeal – On Pakkumine</title>
+<style>
+  :root {
+    --bg: #14171c; --card: #1d222a; --line: #2c333d; --text: #e8ecf1; --muted: #8e99a8;
+    --accent: #3ddc84; --accent-text: #0b2a18; --warn: #f0b429; --bad: #ff6b6b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f6f9; --card: #ffffff; --line: #dde2e9; --text: #1b2330; --muted: #5d6877; --accent: #1f9d55; --accent-text: #ffffff; --warn: #a66f00; --bad: #c92a2a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  input[type=text] { flex: 1 1 260px; padding: 10px 12px; font-size: 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button, .btn { padding: 10px 16px; font-size: 15px; font-weight: 600; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text); cursor: pointer; text-decoration: none; display: inline-block; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); margin: 8px 0; min-height: 1.5em; }
+  #error { color: var(--bad); margin: 8px 0; white-space: pre-wrap; }
+  progress { width: 100%; height: 8px; margin: 4px 0 12px; accent-color: var(--accent); }
+  .game { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .game h2 { margin: 0; font-size: 18px; }
+  .steam { color: var(--muted); font-size: 14px; margin: 2px 0 10px; }
+  .steam a { color: inherit; }
+  .offer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); }
+  .offer .info { flex: 1 1 240px; min-width: 0; }
+  .offer .store { font-weight: 600; }
+  .offer .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .offer .price { font-size: 20px; font-weight: 700; }
+  .cheaper { color: var(--accent); font-size: 13px; font-weight: 600; }
+  .dearer { color: var(--warn); font-size: 13px; }
+  .none { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .notes { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>GotADeal</h1>
+  <p class="sub">Sisesta oma Steami konto nimi või ID – otsime wishlisti mängudele pakkumisi võtmete edasimüüjate lehtedelt.</p>
+
+  <form id="form">
+    <input type="text" id="user" placeholder="Steami kasutajanimi, SteamID64 või profiili link" autocomplete="off" required>
+    <button type="submit" id="go">Otsi pakkumisi</button>
+  </form>
+  <p class="sub" style="font-size:13px">Wishlist peab olema avalik (Steam → Profiil → Privaatsusseaded → "Game details" = Public).</p>
+
+  <div id="status"></div>
+  <div id="error"></div>
+  <progress id="bar" value="0" max="1" hidden></progress>
+  <div id="results"></div>
+</main>
+
+<script>
+const form = document.getElementById('form');
+const input = document.getElementById('user');
+const goBtn = document.getElementById('go');
+const statusEl = document.getElementById('status');
+const errorEl = document.getElementById('error');
+const bar = document.getElementById('bar');
+const results = document.getElementById('results');
+let source = null;
+let stats = { total: 0, done: 0, found: 0 };
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function fmt(price, currency) {
+  const sym = { EUR: '€', USD: '$', GBP: '£' }[currency];
+  const n = price.toFixed(2);
+  return sym === '€' ? n + ' €' : sym ? sym + n : n;
+}
+
+function renderGame(g) {
+  const card = el('div', 'game');
+  card.appendChild(el('h2', null, g.name));
+
+  if (g.steam) {
+    const line = el('div', 'steam');
+    const a = el('a', null, 'Steam');
+    a.href = g.steam.url; a.target = '_blank'; a.rel = 'noopener';
+    line.appendChild(a);
+    if (g.steam.price != null) {
+      let t = ': ' + g.steam.priceText;
+      if (g.steam.discountPercent > 0) t += ' (−' + g.steam.discountPercent + '%)';
+      line.appendChild(document.createTextNode(t));
+    } else {
+      line.appendChild(document.createTextNode(': hinda pole'));
+    }
+    card.appendChild(line);
+  }
+
+  if (g.offers.length === 0) {
+    card.appendChild(el('div', 'none', 'Ühestki poest sobivat pakkumist ei leitud.'));
+  }
+  g.offers.forEach((o, i) => {
+    const row = el('div', 'offer');
+    const info = el('div', 'info');
+    info.appendChild(el('div', 'store', o.store + (i === 0 && g.offers.length > 1 ? ' – odavaim' : '')));
+    info.appendChild(el('div', 'meta', o.title));
+    if (o.duration) info.appendChild(el('div', 'meta', 'Kestus: ' + o.duration));
+    if (typeof o.diffVsSteam === 'number') {
+      if (o.diffVsSteam > 0) info.appendChild(el('div', 'cheaper', 'Odavam kui Steamis: −' + o.diffVsSteam.toFixed(2) + ' €'));
+      else if (o.diffVsSteam < 0) info.appendChild(el('div', 'dearer', 'Kallim kui Steamis: +' + Math.abs(o.diffVsSteam).toFixed(2) + ' €'));
+    }
+    row.appendChild(info);
+    row.appendChild(el('div', 'price', o.currency ? fmt(o.price, o.currency) : o.priceText));
+    const btn = el('a', 'btn', 'Ava pakkumine');
+    btn.href = o.url; btn.target = '_blank'; btn.rel = 'noopener noreferrer';
+    row.appendChild(btn);
+    card.appendChild(row);
+  });
+
+  if (g.storeNotes && g.storeNotes.length) {
+    card.appendChild(el('div', 'notes', g.storeNotes.map((n) => n.store + ': ' + n.note).join(' · ')));
+  }
+  return card;
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (source) source.close();
+  results.textContent = '';
+  errorEl.textContent = '';
+  statusEl.textContent = 'Ühendan...';
+  bar.hidden = true;
+  goBtn.disabled = true;
+  stats = { total: 0, done: 0, found: 0 };
+
+  source = new EventSource('/api/search?user=' + encodeURIComponent(input.value));
+  const finish = () => { source.close(); source = null; goBtn.disabled = false; };
+
+  source.addEventListener('status', (ev) => { statusEl.textContent = JSON.parse(ev.data).message; });
+  source.addEventListener('start', (ev) => {
+    const d = JSON.parse(ev.data);
+    stats.total = d.total;
+    bar.max = d.total || 1; bar.value = 0; bar.hidden = false;
+    let msg = 'Wishlistis ' + d.wishlistSize + ' mängu. Poed: ' + d.stores.join(', ') + '.';
+    if (d.wishlistSize > d.total) msg += ' Kontrollin esimesed ' + d.total + '.';
+    statusEl.textContent = msg;
+  });
+  source.addEventListener('game', (ev) => {
+    const g = JSON.parse(ev.data);
+    stats.done++;
+    if (g.offers.length) stats.found++;
+    bar.value = stats.done;
+    statusEl.textContent = 'Kontrollitud ' + stats.done + ' / ' + stats.total + ' · pakkumisi leitud ' + stats.found + ' mängule';
+    results.appendChild(renderGame(g));
+  });
+  source.addEventListener('done', () => {
+    statusEl.textContent = 'Valmis. Pakkumisi leitud ' + stats.found + ' mängule ' + stats.total + '-st.';
+    finish();
+  });
+  source.addEventListener('fail', (ev) => {
+    errorEl.textContent = JSON.parse(ev.data).message;
+    statusEl.textContent = '';
+    bar.hidden = true;
+    finish();
+  });
+  source.onerror = () => {
+    if (source && source.readyState === EventSource.CLOSED) return;
+    if (source) {
+      if (!errorEl.textContent && stats.done < stats.total) errorEl.textContent = 'Ühendus serveriga katkes.';
+      finish();
+    }
+  };
+});
+</script>
+</body>
+</html>

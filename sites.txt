@@ -1,0 +1,32 @@
+# GotADeal – poodide nimekiri
+#
+# Üks pood rea kohta, väljad on eraldatud sümboliga |
+# Read, mis algavad märgiga #, ja tühjad read jäetakse vahele.
+# Faili muutmisel EI pea serverit uuesti käivitama – see loetakse iga otsingu alguses uuesti.
+#
+# KAKS VORMINGUT
+#
+# A) AUTOMAATNE (soovitatav, CSS-klasse pole vaja):
+#      Poe nimi | otsingu URL ({query} = mängu nimi) | auto:<tootelingi URL-i osa>
+#    Programm leiab otsingulehelt lingid, mille aadressis on antud tekst (nt /game/), ning loeb
+#    hinna ja pealkirja lingi ümbert. Läbikriipsutatud vana hind jäetakse vahele.
+#
+# B) KÄSITSI SELEKTORITEGA (kui automaatne ei tööta):
+#      Poe nimi | otsingu URL | toote selektor | pealkirja selektor | hinna selektor | lingi selektor | kestuse selektor
+#    Lingi ja kestuse selektor on valikulised (jäta tühjaks). Selektorid leiad brauseris F12 -> Inspect.
+#
+# Enne iga poe pärimist kontrollitakse selle robots.txt faili; keelatud poed jäetakse vahele
+# ja põhjus näidatakse mängu all.
+#
+# NB! Otsingu URL-id ja tootelingi mustrid on kirjutatud mälu ja poodide tekstiversiooni järgi
+# ega ole selles keskkonnas päris HTML-i vastu kontrollitud. Kui mõni pood näitab "0 toodet" või viga,
+# ava poes ise otsing, vaata aadressiriba (otsingu URL) ja mõne mängu lehe aadressi (tootelingi muster)
+# ning paranda siin.
+ 
+Gamesplanet | https://de.gamesplanet.com/search?query={query} | auto:/game/
+WinGameStore | https://www.wingamestore.com/search/?SearchWord={query} | auto:/product/
+ 
+# Fanatical laeb tõenäoliselt tulemused JavaScriptiga, mille Axios + Cheerio ei näe.
+# Kui see annab "0 toodet", on vaja Puppeteer'it (README etapp 7).
+Fanatical | https://www.fanatical.com/en/search?search={query} | auto:/en/game/
+ 
