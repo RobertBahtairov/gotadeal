@@ -43,3 +43,12 @@ Teostusplaan:
 - [ ] 1.Näha eelmiseid soodustusi
 - [ ] 2.Sorteerimine (nt. ainuld alla 15€)
 - [ ] 3.Konverteerida erinevaid valuutasid eurodeks (nt. $14.99 = 13.35€)
+
+## Install
+- Lae alla kõik järgmised failid ühte kausta (nt. D:\gotadeal)
+- <img width="263" height="547" alt="image" src="https://github.com/user-attachments/assets/e0c280f2-aa9e-43a1-9495-902665a11644" />
+- Ava Command Prompt, ning mine asukohta kus need failid on (ie. cd \gotadeal)
+- Installi ja käivida see ("npm install" , "npm start")
+- Mine browseris lehele: "http://localhost:3000"
+
+
